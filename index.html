@@ -73,7 +73,7 @@
 
     async function fetchDepartures() {
       try {
-        const response = await fetch(`https://its.rideralerts.com/InfoPoint/rest/StopDepartures/Get/${STOP_ID}`);
+        const response = await fetch(`https://corsproxy.io/?https://its.rideralerts.com/InfoPoint/rest/StopDepartures/Get/${STOP_ID}`);
         const data = await response.json();
 
         const table = document.getElementById('departure-table');
