@@ -69,12 +69,20 @@
   </table>
 
   <script>
-    const STOP_ID = 167; // Replace with actual stop ID to fetch
+    const STOP_ID = 167;
+    const API_URL = `https://corsproxy.io/?https://its.rideralerts.com/InfoPoint/rest/StopDepartures/Get/${STOP_ID}`;
 
     async function fetchDepartures() {
       try {
-        const response = await fetch(`https://corsproxy.io/?https://its.rideralerts.com/InfoPoint/rest/StopDepartures/Get/${STOP_ID}`);
+        const response = await fetch(API_URL);
         const data = await response.json();
+
+        console.log("✅ API response:", data);
+
+        if (!data?.Routes?.length) {
+          console.warn("⚠️ No routes found in response:", data);
+          return;
+        }
 
         const table = document.getElementById('departure-table');
         table.innerHTML = '';
@@ -94,7 +102,6 @@
 
           if (diffMin <= 1 && diffMin >= -1) {
             statusText = 'Arriving';
-            timeText = '';
             statusClass = 'arriving';
           } else if (diffMin < 30 && diffMin > 1) {
             timeText = `in ${diffMin} min`;
@@ -113,12 +120,12 @@
           table.appendChild(row);
         });
       } catch (err) {
-        console.error('Failed to fetch departures:', err);
+        console.error('❌ Failed to fetch departures:', err);
       }
     }
 
     fetchDepartures();
-    setInterval(fetchDepartures, 30000); // refresh every 30 seconds
+    setInterval(fetchDepartures, 30000);
   </script>
 </body>
 </html>
