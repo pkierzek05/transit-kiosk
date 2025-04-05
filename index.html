@@ -69,63 +69,66 @@
   </table>
 
   <script>
-    const STOP_ID = 167;
-    const API_URL = `https://corsproxy.io/?https://its.rideralerts.com/InfoPoint/rest/StopDepartures/Get/${STOP_ID}`;
+     const STOP_ID = 167;
 
-    async function fetchDepartures() {
-      try {
-        const response = await fetch(API_URL);
-        const data = await response.json();
+  async function fetchDepartures() {
+    const proxyUrl = "https://api.allorigins.win/get?url=";
+    const targetUrl = encodeURIComponent(`https://its.rideralerts.com/InfoPoint/rest/StopDepartures/Get/${STOP_ID}`);
 
-        console.log("✅ API response:", data);
+    try {
+      const response = await fetch(`${proxyUrl}${targetUrl}`);
+      const wrappedData = await response.json();
+      const data = JSON.parse(wrappedData.contents); // Unwrap real JSON
 
-        if (!data?.Routes?.length) {
-          console.warn("⚠️ No routes found in response:", data);
-          return;
+      console.log("✅ API response:", data);
+
+      if (!data?.Routes?.length) {
+        console.warn("⚠️ No routes found in response:", data);
+        return;
+      }
+
+      const table = document.getElementById('departure-table');
+      table.innerHTML = '';
+
+      data.Routes.slice(0, 3).forEach(route => {
+        const departure = route.Departures[0];
+        const routeNumber = route.RouteAbbreviation;
+        const destination = departure.Destination;
+
+        const departureTime = new Date(departure.ScheduledTime);
+        const now = new Date();
+        const diffMin = Math.round((departureTime - now) / 60000);
+
+        let timeText = '';
+        let statusText = '';
+        let statusClass = '';
+
+        if (diffMin <= 1 && diffMin >= -1) {
+          statusText = 'Arriving';
+          statusClass = 'arriving';
+        } else if (diffMin < 30 && diffMin > 1) {
+          timeText = `in ${diffMin} min`;
+        } else {
+          timeText = departureTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
         }
 
-        const table = document.getElementById('departure-table');
-        table.innerHTML = '';
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${routeNumber}</td>
+          <td>${destination}</td>
+          <td class="time">${timeText}</td>
+          <td class="${statusClass}">${statusText}</td>
+        `;
 
-        data.Routes.slice(0, 3).forEach(route => {
-          const departure = route.Departures[0];
-          const routeNumber = route.RouteAbbreviation;
-          const destination = departure.Destination;
-
-          const departureTime = new Date(departure.ScheduledTime);
-          const now = new Date();
-          const diffMin = Math.round((departureTime - now) / 60000);
-
-          let timeText = '';
-          let statusText = '';
-          let statusClass = '';
-
-          if (diffMin <= 1 && diffMin >= -1) {
-            statusText = 'Arriving';
-            statusClass = 'arriving';
-          } else if (diffMin < 30 && diffMin > 1) {
-            timeText = `in ${diffMin} min`;
-          } else {
-            timeText = departureTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-          }
-
-          const row = document.createElement('tr');
-          row.innerHTML = `
-            <td>${routeNumber}</td>
-            <td>${destination}</td>
-            <td class="time">${timeText}</td>
-            <td class="${statusClass}">${statusText}</td>
-          `;
-
-          table.appendChild(row);
-        });
-      } catch (err) {
-        console.error('❌ Failed to fetch departures:', err);
-      }
+        table.appendChild(row);
+      });
+    } catch (err) {
+      console.error("❌ Failed to fetch departures:", err);
     }
+  }
 
-    fetchDepartures();
-    setInterval(fetchDepartures, 30000);
+  fetchDepartures();
+  setInterval(fetchDepartures, 30000);
   </script>
 </body>
 </html>
