@@ -2,133 +2,243 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Transit Departure Screen</title>
+  <title>Bus Departures</title>
   <style>
-    body {
+    html, body {
       margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: #121212;
-      color: #ffffff;
+      padding: 0;
+      height: 100%;
+      font-family: 'Segoe UI', 'Arial', 'Verdana', sans-serif;
+      background-color: #ffffff;
+      color: #003366;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      padding: 40px;
+      font-size: 24px;
     }
 
-    h1 {
-      font-size: 3em;
+    header {
+      background-color: #003366;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+    }
+
+    header img {
+      position: absolute;
+      left: 20px;
+      height: 70px;
+    }
+
+    header h1 {
+      color: white;
+      font-size: 40px;
+      margin: 0;
+    }
+
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 30px;
+    }
+
+    section {
+      margin-bottom: 60px;
+    }
+
+    h2 {
+      font-size: 36px;
+      font-weight: bold;
+      color: #003366;
       margin-bottom: 20px;
-      color: #00bcd4;
+      margin-top: 20px;
     }
 
     table {
-      width: 90%;
+      width: 100%;
       border-collapse: collapse;
-      font-size: 1.8em;
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 20px;
     }
 
     th, td {
       padding: 20px;
       text-align: left;
+      border-bottom: 1px solid #ccc;
     }
 
     th {
-      background-color: #1f1f1f;
+      background-color: #c6d4e1;
+      color: #003366;
     }
 
-    tr:nth-child(even) {
-      background-color: #2a2a2a;
+    th:nth-child(1), td:nth-child(1) { width: 20%; }
+    th:nth-child(2), td:nth-child(2) { width: 40%; }
+    th:nth-child(3), td:nth-child(3) { width: 20%; }
+    th:nth-child(4), td:nth-child(4) { width: 20%; }
+
+    tbody tr:nth-child(even) {
+      background-color: #f2f2f2;
     }
 
-    .arriving {
-      color: #00e676;
+    .status.on-time {
+      color: green;
       font-weight: bold;
     }
 
+    .status.late {
+      color: red;
+      font-weight: bold;
+    }
+
+    footer {
+      background-color: #003366;
+      color: white;
+      padding: 20px 40px;
+      font-size: 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     .time {
-      color: #ffc107;
+      font-weight: bold;
     }
   </style>
+  <script>
+    const stops = [
+      { id: 459, name: "Martin Way at Pattison St [EB]" },
+      { id: 441, name: "Martin Way at Pattison St [WB]" }
+    ];
+
+    const routeMap = {
+      621: "62A",
+      622: "62B",
+      100: "ONE",
+      60: "60"
+    };
+
+    function updateTime() {
+      const now = new Date();
+      const options = { hour: '2-digit', minute: '2-digit' };
+      const timeString = now.toLocaleTimeString([], options);
+      const dateString = now.toLocaleDateString(undefined, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      document.getElementById('time').textContent = timeString;
+      document.getElementById('date').textContent = dateString;
+    }
+
+    async function fetchAllStops() {
+      const container = document.getElementById("departures");
+      container.innerHTML = "";
+
+      for (const stop of stops) {
+        try {
+          const response = await fetch(`https://its.rideralerts.com/InfoPoint/rest/StopDepartures/Get/${stop.id}`);
+          const data = await response.json();
+
+          const arrivals = [];
+
+          data[0].RouteDirections.forEach(route => {
+            const routeId = route.RouteId;
+            const routeName = routeMap[routeId] || route.RouteShortName || `Route ${routeId}`;
+            if (route.Departures.length > 0) {
+              route.Departures.forEach(dep => {
+                const eta = new Date(dep.ETALocalTime);
+                const sta = new Date(dep.STALocalTime);
+                const now = new Date();
+                const minutes = Math.round((eta - now) / 60000);
+
+                if (minutes < -1) return;
+
+                const etaDisplay =
+                  minutes < 0 ? "Departed"
+                  : minutes === 0 ? "Arriving"
+                  : minutes <= 30 ? `${minutes} min${minutes > 1 ? "s" : ""}`
+                  : eta.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+                const lateBy = Math.round((eta - sta) / 60000);
+                const isLate = lateBy > 2;
+                const status = isLate ? `❌ Late (${lateBy} min)` : "✅ On Time";
+                const statusClass = isLate ? "late" : "on-time";
+
+                arrivals.push({
+                  route: routeName,
+                  destination: dep.Trip.InternetServiceDesc,
+                  eta: etaDisplay,
+                  status,
+                  statusClass,
+                  minutes
+                });
+              });
+            }
+          });
+
+          arrivals.sort((a, b) => a.minutes - b.minutes);
+          const topArrivals = arrivals.slice(0, 3);
+
+          const section = document.createElement("section");
+          section.innerHTML = `
+            <h2>${stop.name} (Stop #${stop.id})</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Route</th>
+                  <th>Destination</th>
+                  <th>Arrival Time</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${
+                  topArrivals.length === 0
+                    ? `<tr><td colspan="4">No upcoming departures</td></tr>`
+                    : topArrivals.map(a =>
+                        `<tr>
+                          <td>${a.route}</td>
+                          <td>${a.destination}</td>
+                          <td>${a.eta}</td>
+                          <td class="status ${a.statusClass}">${a.status}</td>
+                        </tr>`
+                      ).join("")
+                }
+              </tbody>
+            </table>
+          `;
+          container.appendChild(section);
+        } catch (err) {
+          console.error(`Error loading stop ${stop.id}:`, err);
+        }
+      }
+    }
+
+    setInterval(updateTime, 1000);
+    setInterval(fetchAllStops, 30000);
+    window.onload = () => {
+      updateTime();
+      fetchAllStops();
+    };
+  </script>
 </head>
 <body>
-  <h1>Transit Departures</h1>
-  <table>
-    <thead>
-      <tr>
-        <th>Route</th>
-        <th>Destination</th>
-        <th>Departure Time</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody id="departure-table">
-      <!-- Rows will be added here -->
-    </tbody>
-  </table>
+  <header>
+    <img src="file:///C:/Users/PKierzek/Pictures/client-top-bar-logo.png" alt="Intercity Transit Logo" />
+    <h1>Bus Departures</h1>
+  </header>
 
-  <script>
-     const STOP_ID = 167;
+  <main id="departures">
+    <!-- Stops load here -->
+  </main>
 
-  async function fetchDepartures() {
-    const proxyUrl = "https://api.allorigins.win/get?url=";
-    const targetUrl = encodeURIComponent(`https://its.rideralerts.com/InfoPoint/rest/StopDepartures/Get/${STOP_ID}`);
-
-    try {
-      const response = await fetch(`${proxyUrl}${targetUrl}`);
-      const wrappedData = await response.json();
-      const data = JSON.parse(wrappedData.contents); // Unwrap real JSON
-
-      console.log("✅ API response:", data);
-
-      if (!data?.Routes?.length) {
-        console.warn("⚠️ No routes found in response:", data);
-        return;
-      }
-
-      const table = document.getElementById('departure-table');
-      table.innerHTML = '';
-
-      data.Routes.slice(0, 3).forEach(route => {
-        const departure = route.Departures[0];
-        const routeNumber = route.RouteAbbreviation;
-        const destination = departure.Destination;
-
-        const departureTime = new Date(departure.ScheduledTime);
-        const now = new Date();
-        const diffMin = Math.round((departureTime - now) / 60000);
-
-        let timeText = '';
-        let statusText = '';
-        let statusClass = '';
-
-        if (diffMin <= 1 && diffMin >= -1) {
-          statusText = 'Arriving';
-          statusClass = 'arriving';
-        } else if (diffMin < 30 && diffMin > 1) {
-          timeText = `in ${diffMin} min`;
-        } else {
-          timeText = departureTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-        }
-
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${routeNumber}</td>
-          <td>${destination}</td>
-          <td class="time">${timeText}</td>
-          <td class="${statusClass}">${statusText}</td>
-        `;
-
-        table.appendChild(row);
-      });
-    } catch (err) {
-      console.error("❌ Failed to fetch departures:", err);
-    }
-  }
-
-  fetchDepartures();
-  setInterval(fetchDepartures, 30000);
-  </script>
+  <footer>
+    <div id="date"></div>
+    <div class="time" id="time"></div>
+  </footer>
 </body>
 </html>
