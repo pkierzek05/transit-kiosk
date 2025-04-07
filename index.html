@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Bus Departures</title>
+  <title>Next Bus Arrivals</title>
   <style>
     html, body {
       margin: 0;
@@ -14,6 +14,7 @@
       display: flex;
       flex-direction: column;
       font-size: 24px;
+      overflow: hidden;
     }
 
     header {
@@ -23,24 +24,29 @@
       justify-content: center;
       padding: 20px;
       position: relative;
+      flex-shrink: 0;
     }
 
- header img {
-  position: absolute;
-  right: 20px; 
-  height: 70px;
-}
+    header img {
+      position: absolute;
+      right: 20px;
+      height: 70px;
+    }
 
     header h1 {
       color: white;
       font-size: 40px;
       margin: 0;
+      padding-right: 100px;
     }
 
     main {
-      flex: 1;
-      overflow-y: auto;
+      flex: 1 1 auto;
+      overflow: hidden;
       padding: 30px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
     }
 
     section {
@@ -93,6 +99,24 @@
       font-weight: bold;
     }
 
+    #alerts-footer {
+      width: 100%;
+      background-color: #fff6e6;
+      color: #333;
+      font-size: 20px;
+      padding: 10px 20px;
+      border-top: 2px solid #ffc107;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    #alert-message {
+      opacity: 1;
+      transition: opacity 0.5s ease-in-out;
+    }
+
     footer {
       background-color: #003366;
       color: white;
@@ -101,6 +125,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-shrink: 0;
     }
 
     .time {
@@ -218,23 +243,87 @@
       }
     }
 
-    setInterval(updateTime, 1000);
-    setInterval(fetchAllStops, 30000);
+    let alertMessages = [];
+    let alertIndex = 0;
+
+    async function fetchServiceAlerts() {
+      try {
+        const response = await fetch("https://its.rideralerts.com/InfoPoint/rest/PublicMessages/GetAllMessages");
+        const data = await response.json();
+
+        const uniqueMessages = new Map();
+
+        data.forEach(msg => {
+          if (msg.Published && msg.MessageId && !uniqueMessages.has(msg.MessageId)) {
+            const cleanMessage = msg.Message
+              .replace(/\n{2,}/g, "<br>")
+              .replace(/\n/g, " ")
+              .trim();
+
+            const full = `<strong>⚠️ ${msg.Header}</strong>: ${cleanMessage}`;
+            uniqueMessages.set(msg.MessageId, full);
+          }
+        });
+
+        alertMessages = Array.from(uniqueMessages.values());
+        alertIndex = 0;
+        rotateAlerts();
+
+      } catch (err) {
+        console.error("Error loading service alerts:", err);
+        alertMessages = ["⚠️ Unable to load service alerts at this time."];
+        alertIndex = 0;
+        rotateAlerts();
+      }
+    }
+
+    function rotateAlerts() {
+      const alertEl = document.getElementById("alert-message");
+      if (!alertEl) return;
+
+      alertEl.style.opacity = 0;
+
+      setTimeout(() => {
+        if (alertMessages.length === 0) {
+          alertEl.innerHTML = "<strong>✅ No current service alerts.</strong>";
+        } else {
+          alertEl.innerHTML = alertMessages[alertIndex];
+          alertIndex = (alertIndex + 1) % alertMessages.length;
+        }
+        alertEl.style.opacity = 1;
+      }, 500);
+    }
+
     window.onload = () => {
       updateTime();
       fetchAllStops();
+      fetchServiceAlerts();
     };
+
+    setInterval(updateTime, 1000);
+    setInterval(fetchAllStops, 30000);
+    setInterval(fetchServiceAlerts, 300000);
+    setInterval(rotateAlerts, 15000);
   </script>
 </head>
 <body>
   <header>
+    <h1>Next Bus Arrivals</h1>
     <img src="client-top-bar-logo.png" alt="Intercity Transit Logo" />
-    <h1><h1>Next Bus Arrivals</h1></h1>
   </header>
 
   <main id="departures">
     <!-- Stops load here -->
   </main>
+
+  <!-- Accessible Service Alerts Bar -->
+  <div id="alerts-footer"
+       role="region"
+       aria-live="polite"
+       aria-label="Service Alerts">
+    <strong style="color: #cc3300;">Service Alert:</strong>
+    <span id="alert-message" aria-atomic="true">Loading alerts...</span>
+  </div>
 
   <footer>
     <div id="date"></div>
